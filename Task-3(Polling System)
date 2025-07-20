@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+
+contract PollingSystem {
+
+
+    struct Poll {
+        string title;
+        string[] options;
+        uint256 endTime;
+        mapping(uint256 => uint256) voteCount;  // optionIndex => voteCount
+        mapping(address => bool) hasVoted;      // Voter tracking
+        bool exists;
+    }
+
+
+    mapping(uint256 => Poll) private polls;
+    uint256 public pollCount;
+
+
+    // 1. Create a poll
+    function createPoll(string memory _title, string[] memory _options, uint256 _durationInMinutes) public {
+        require(_options.length >= 2, "At least 2 options required");
+
+
+        pollCount++;
+        Poll storage newPoll = polls[pollCount];
+        newPoll.title = _title;
+        newPoll.options = _options;
+        newPoll.endTime = block.timestamp + (_durationInMinutes * 1 minutes);
+        newPoll.exists = true;
+    }
+
+
+    // 2. Vote for an option
+    function vote(uint256 _pollId, uint256 _optionIndex) public {
+        Poll storage poll = polls[_pollId];
+        require(poll.exists, "Poll does not exist");
+        require(block.timestamp < poll.endTime, "Poll has ended");
+        require(!poll.hasVoted[msg.sender], "You have already voted");
+        require(_optionIndex < poll.options.length, "Invalid option");
+
+
+        poll.voteCount[_optionIndex]++;
+        poll.hasVoted[msg.sender] = true;
+    }
+
+
+    // 3. Get total votes for a specific option (for viewing)
+    function getVotes(uint256 _pollId, uint256 _optionIndex) public view returns (uint256) {
+        Poll storage poll = polls[_pollId];
+        require(poll.exists, "Poll does not exist");
+        return poll.voteCount[_optionIndex];
+    }
+
+
+    // 4. Get poll details (title, options, time left)
+    function getPoll(uint256 _pollId) public view returns (
+        string memory title,
+        string[] memory options,
+        uint256 timeRemaining
+    ) {
+        Poll storage poll = polls[_pollId];
+        require(poll.exists, "Poll does not exist");
+
+
+        uint256 remaining = poll.endTime > block.timestamp ? poll.endTime - block.timestamp : 0;
+        return (poll.title, poll.options, remaining);
+    }
+
+
+    // 5. Get winning option (after poll ends)
+    function getWinningOption(uint256 _pollId) public view returns (string memory winner, uint256 votes) {
+        Poll storage poll = polls[_pollId];
+        require(poll.exists, "Poll does not exist");
+        require(block.timestamp >= poll.endTime, "Poll is still ongoing");
+
+
+        uint256 winningVoteCount = 0;
+        uint256 winningIndex = 0;
+
+
+        for (uint256 i = 0; i < poll.options.length; i++) {
+            if (poll.voteCount[i] > winningVoteCount) {
+                winningVoteCount = poll.voteCount[i];
+                winningIndex = i;
+            }
+        }
+
+
+        return (poll.options[winningIndex], winningVoteCount);
+    }
+}
