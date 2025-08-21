@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+
+contract CryptoLocking {
+    struct Deposit {
+        uint256 amount;
+        uint256 unlockTime;
+    }
+
+
+    // Mapping to store each user's deposit
+    mapping(address => Deposit) public deposits;
+
+
+    // 1. Deposit function with lock-in time (in seconds)
+    function deposit(uint256 _lockTimeInSeconds) external payable {
+        require(msg.value > 0, "Must deposit some Ether");
+        require(deposits[msg.sender].amount == 0, "You already have a deposit");
+
+
+        deposits[msg.sender] = Deposit({
+            amount: msg.value,
+            unlockTime: block.timestamp + _lockTimeInSeconds
+        });
+    }
+
+
+    // 2. Withdraw function allowed only after unlockTime
+    function withdraw() external {
+        Deposit storage userDeposit = deposits[msg.sender];
+        require(userDeposit.amount > 0, "No deposit found");
+        require(block.timestamp >= userDeposit.unlockTime, "Funds are still locked");
+
+
+        uint256 amount = userDeposit.amount;
+        userDeposit.amount = 0;  // Prevent re-entrancy
+        userDeposit.unlockTime = 0;
+
+
+        (bool success, ) = msg.sender.call{value: amount}("");
+        require(success, "Withdrawal failed");
+    }
+
+
+    // 3. View function to check user's lock details
+    function getMyDeposit() external view returns (uint256 amount, uint256 unlockTime, uint256 timeLeft) {
+        Deposit storage dep = deposits[msg.sender];
+        amount = dep.amount;
+        unlockTime = dep.unlockTime;
+        timeLeft = dep.unlockTime > block.timestamp ? dep.unlockTime - block.timestamp : 0;
+    }
+
+
+    // Receive fallback
+    receive() external payable {
+        revert("Please use the deposit function with lock time");
+    }
+}
